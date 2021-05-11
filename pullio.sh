@@ -165,7 +165,7 @@ for i in "${!containers[@]}"; do
         new_opencontainers_image_version=$("${DOCKER_BINARY}" image inspect --format='{{ index .Config.Labels "org.opencontainers.image.version" }}' "$image_name")
         new_opencontainers_image_revision=$("${DOCKER_BINARY}" image inspect --format='{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$image_name")
 
-        status="I've got an update waiting for me.\nGive it to me, please."
+        status="$container_name has got an update waiting for you.\nUpdate me, please."
         status_generic="update_available"
         color=768753
         if [[ "${image_digest}" != "$container_image_digest" ]] && [[ $pullio_update == true ]]; then
@@ -178,12 +178,12 @@ for i in "${!containers[@]}"; do
             fi
             echo "$container_name: Updating container..."
             if compose_up_wrapper "$docker_compose_workdir" "${docker_compose_service}" > /dev/null 2>&1; then
-                status="I just updated myself.\nFeeling brand spanking new again!"
+                status="$container_name just got updated.\nFeeling brand spanking new again!"
                 status_generic="update_success"
                 color=3066993
             else
                 echo "$container_name: Updating container failed!"
-                status="I tried to update myself.\nIt didn't work out, I might need some help."
+                status="$container_name tried to update itself.\nIt didn't work out, I might need some help."
                 status_generic="update_failure"
                 color=15158332
             fi
