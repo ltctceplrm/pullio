@@ -18,7 +18,7 @@ while [ "$1" != "" ]; do
             [[ -n $VALUE ]] && [[ $VALUE != "--"* ]] && TAG=".$VALUE"
             ;;
         --debug)
-            [[ -n $VALUE ]] && [[ $VALUE != "--"* ]] && DEBUG="$VALUE"
+            [[ $VALUE != "--"* ]] && DEBUG="${VALUE:-debug}"
             ;;
     esac
     shift
@@ -78,6 +78,7 @@ send_discord_notification() {
         ],
         "author": {
             "name": "'${2}'",
+            "url": "'${13}'",
             "icon_url": "'${author_url}'"
         },
         "footer": {
@@ -89,7 +90,7 @@ send_discord_notification() {
     "username": "Pullio",
     "avatar_url": "https://github.com/hotio/pullio/raw/master/pullio.png"
     }'
-    curl -fsSL -H "User-Agent: Pullio" -H "Content-Type: application/json" -d "${json}" "${6}" > /dev/null
+    curl -fsSL -H "User-Agent: Pullio" -H "Content-Type: application/json" -d "${json}" "${6}"
 }
 
 send_generic_webhook() {
@@ -104,9 +105,10 @@ send_generic_webhook() {
     "old_revision": "'${7}'",
     "new_revision": "'${8}'",
     "type": "'${1}'",
+    "url": "'${12}'",
     "timestamp": "'$(date -u +'%FT%T.%3NZ')'"
     }'
-    curl -fsSL -H "User-Agent: Pullio" -H "Content-Type: application/json" -d "${json}" "${6}" > /dev/null
+    curl -fsSL -H "User-Agent: Pullio" -H "Content-Type: application/json" -d "${json}" "${6}"
 }
 
 export_env_vars() {
@@ -121,6 +123,7 @@ export_env_vars() {
     export PULLIO_NEW_REVISION=${9}
     export PULLIO_COMPOSE_SERVICE=${10}
     export PULLIO_COMPOSE_WORKDIR=${11}
+    export PULLIO_AUTHOR_URL=${13}
 }
 
 sum="$(sha1sum "$0" | awk '{print $1}')"
@@ -149,15 +152,16 @@ for i in "${!containers[@]}"; do
     pullio_script_notify=($("${DOCKER_BINARY}" inspect --format='{{ index .Config.Labels "org.hotio.pullio'"${TAG}"'.script.notify" }}' "$container_name"))
     pullio_registry_authfile=$("${DOCKER_BINARY}" inspect --format='{{ index .Config.Labels "org.hotio.pullio'"${TAG}"'.registry.authfile" }}' "$container_name")
     pullio_author_avatar=$("${DOCKER_BINARY}" inspect --format='{{ index .Config.Labels "org.hotio.pullio'"${TAG}"'.author.avatar" }}' "$container_name")
+    pullio_author_url=$("${DOCKER_BINARY}" inspect --format='{{ index .Config.Labels "org.hotio.pullio'"${TAG}"'.author.url" }}' "$container_name")
 
     if [[ ( -n $docker_compose_version ) && ( $pullio_update == true || $pullio_notify == true ) ]]; then
         if [[ -f $pullio_registry_authfile ]]; then
             echo "$container_name: Registry login..."
-            jq -r .password < "$pullio_registry_authfile" | "${DOCKER_BINARY}" login --username "$(jq -r .username < "$pullio_registry_authfile")" --password-stdin "$(jq -r .registry < "$pullio_registry_authfile")" > /dev/null
+            jq -r .password < "$pullio_registry_authfile" | "${DOCKER_BINARY}" login --username "$(jq -r .username < "$pullio_registry_authfile")" --password-stdin "$(jq -r .registry < "$pullio_registry_authfile")"
         fi
 
         echo "$container_name: Pulling image..."
-        if ! compose_pull_wrapper "$docker_compose_workdir" "${docker_compose_service}" > /dev/null 2>&1; then
+        if ! compose_pull_wrapper "$docker_compose_workdir" "${docker_compose_service}"; then
             echo "$container_name: Pulling failed!"
         fi
 
@@ -171,13 +175,13 @@ for i in "${!containers[@]}"; do
         if [[ "${image_digest}" != "$container_image_digest" ]] && [[ $pullio_update == true ]]; then
             if [[ -n "${pullio_script_update[*]}" ]]; then
                 echo "$container_name: Stopping container..."
-                "${DOCKER_BINARY}" stop "${container_name}" > /dev/null
+                "${DOCKER_BINARY}" stop "${container_name}"
                 echo "$container_name: Executing update script..."
-                export_env_vars "$container_name" "${image_name}" "${pullio_author_avatar}" "${container_image_digest/sha256:/}" "${image_digest/sha256:/}" "${old_opencontainers_image_version}" "${new_opencontainers_image_version}" "${old_opencontainers_image_revision}" "${new_opencontainers_image_revision}" "${docker_compose_service}" "${docker_compose_workdir}"
+                export_env_vars "$container_name" "${image_name}" "${pullio_author_avatar}" "${container_image_digest/sha256:/}" "${image_digest/sha256:/}" "${old_opencontainers_image_version}" "${new_opencontainers_image_version}" "${old_opencontainers_image_revision}" "${new_opencontainers_image_revision}" "${docker_compose_service}" "${docker_compose_workdir}" "${pullio_author_url}"
                 "${pullio_script_update[@]}"
             fi
             echo "$container_name: Updating container..."
-            if compose_up_wrapper "$docker_compose_workdir" "${docker_compose_service}" > /dev/null 2>&1; then
+            if compose_up_wrapper "$docker_compose_workdir" "${docker_compose_service}"; then
                 status="$container_name just got updated.\nFeeling brand spanking new again!"
                 status_generic="update_success"
                 color=3066993
@@ -196,16 +200,16 @@ for i in "${!containers[@]}"; do
             if [[ $notified_digest != "$image_digest" ]]; then
                 if [[ -n "${pullio_script_notify[*]}" ]]; then
                     echo "$container_name: Executing notify script..."
-                    export_env_vars "$container_name" "${image_name}" "${pullio_author_avatar}" "${container_image_digest/sha256:/}" "${image_digest/sha256:/}" "${old_opencontainers_image_version}" "${new_opencontainers_image_version}" "${old_opencontainers_image_revision}" "${new_opencontainers_image_revision}" "${docker_compose_service}" "${docker_compose_workdir}"
+                    export_env_vars "$container_name" "${image_name}" "${pullio_author_avatar}" "${container_image_digest/sha256:/}" "${image_digest/sha256:/}" "${old_opencontainers_image_version}" "${new_opencontainers_image_version}" "${old_opencontainers_image_revision}" "${new_opencontainers_image_revision}" "${docker_compose_service}" "${docker_compose_workdir}" "${pullio_author_url}"
                     "${pullio_script_notify[@]}"
                 fi
                 if [[ -n "$pullio_discord_webhook" ]]; then
                     echo "$container_name: Sending discord notification..."
-                    send_discord_notification "$status" "$container_name" "$old_opencontainers_image_version" "$new_opencontainers_image_version" "$image_name" "$pullio_discord_webhook" "$old_opencontainers_image_revision" "$new_opencontainers_image_revision" "${container_image_digest/sha256:/}" "${image_digest/sha256:/}" "$color" "$pullio_author_avatar"
+                    send_discord_notification "$status" "$container_name" "$old_opencontainers_image_version" "$new_opencontainers_image_version" "$image_name" "$pullio_discord_webhook" "$old_opencontainers_image_revision" "$new_opencontainers_image_revision" "${container_image_digest/sha256:/}" "${image_digest/sha256:/}" "$color" "$pullio_author_avatar" "$pullio_author_url"
                 fi
                 if [[ -n "$pullio_generic_webhook" ]]; then
                     echo "$container_name: Sending generic webhook..."
-                    send_generic_webhook "$status_generic" "$container_name" "$old_opencontainers_image_version" "$new_opencontainers_image_version" "$image_name" "$pullio_generic_webhook" "$old_opencontainers_image_revision" "$new_opencontainers_image_revision" "${container_image_digest/sha256:/}" "${image_digest/sha256:/}" "$pullio_author_avatar"
+                    send_generic_webhook "$status_generic" "$container_name" "$old_opencontainers_image_version" "$new_opencontainers_image_version" "$image_name" "$pullio_generic_webhook" "$old_opencontainers_image_revision" "$new_opencontainers_image_revision" "${container_image_digest/sha256:/}" "${image_digest/sha256:/}" "$pullio_author_avatar" "$pullio_author_url"
                 fi
                 echo "$image_digest" > "$CACHE_LOCATION/$sum-$container_name.notified"
             fi
@@ -213,4 +217,5 @@ for i in "${!containers[@]}"; do
     fi
 done
 
-"${DOCKER_BINARY}" image prune --force > /dev/null
+echo "Pruning docker images..."
+"${DOCKER_BINARY}" image prune --force
