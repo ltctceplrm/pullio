@@ -1,6 +1,6 @@
 #!/bin/bash
 
-COMPOSE_BINARY="${COMPOSE_BINARY:-$(which 'docker-compose')}"
+COMPOSE_BINARY="${COMPOSE_BINARY:-$(which 'docker')}"
 DOCKER_BINARY="${DOCKER_BINARY:-$(which 'docker')}"
 CACHE_LOCATION=/tmp
 TAG=""
@@ -32,19 +32,19 @@ echo "Latest version: ${LATEST_VERSION}"
 
 compose_pull_wrapper() {
     if [[ -z ${COMPOSE_BINARY} ]]; then
-        "${DOCKER_BINARY}" run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$1:$1" -w="$1" linuxserver/docker-compose pull "$2"
+        "${DOCKER_BINARY}" run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$1:$1" -w="$1" linuxserver/docker compose pull "$2"
     else
         cd "$1" || exit 1
-        "${COMPOSE_BINARY}" pull "$2"
+        "${COMPOSE_BINARY}" compose pull "$2"
     fi
 }
 
 compose_up_wrapper() {
     if [[ -z ${COMPOSE_BINARY} ]]; then
-        "${DOCKER_BINARY}" run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$1:$1" -w="$1" linuxserver/docker-compose up -d --always-recreate-deps "$2"
+        "${DOCKER_BINARY}" run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$1:$1" -w="$1" linuxserver/docker compose up -d --always-recreate-deps "$2"
     else
         cd "$1" || exit 1
-        "${COMPOSE_BINARY}" up -d --always-recreate-deps "$2"
+        "${COMPOSE_BINARY}" compose up -d --always-recreate-deps "$2"
     fi
 }
 
